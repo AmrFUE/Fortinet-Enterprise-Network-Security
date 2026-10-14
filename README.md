@@ -50,10 +50,13 @@ The project simulates a distributed corporate organization composed of:
 
 ## 2. Enterprise Network Architecture
 
-### 2.1 Topology Diagram
+### 2.1 Complete Production Topology
+![Enterprise Final Topology](assets/Final%20Topology.png)
+
+### 2.2 Logical Flowchart Diagram
 ```mermaid
 flowchart TD
-    subgraph Management_Cloud ["ISP Cloud / Management (Cloud0: 192.168.85.0/24)"]
+    subgraph Management_Cloud ["ISP Cloud / Management (Net / Cloud0: 192.168.85.0/24)"]
         ISPHQ["ISP-HQ Router<br/>Gi0/0: .201<br/>Gi0/1: 203.0.113.1/30"]
         ISPBR1["ISP-BR1 Router<br/>Gi0/0: .202<br/>Gi0/1: 203.0.113.9/30"]
         ISPBR2["ISP-BR2 Router<br/>Gi0/0: .203<br/>Gi0/1: 203.0.113.17/30"]
@@ -73,8 +76,8 @@ flowchart TD
         WANSW["WAN Switch (L2)"]
         WANHQ --- WANSW
         
-        FW_MAIN["Main-HQ (Primary)<br/>Priority 200<br/>port1: 203.0.113.6/30"]
-        FW_BACKUP["Backup-HQ (Standby)<br/>Priority 100<br/>port1: 203.0.113.6/30"]
+        FW_MAIN["Main-HQ (Primary)<br/>Priority: 200<br/>port1: 203.0.113.6/30"]
+        FW_BACKUP["Backup-HQ (Standby)<br/>Priority: 100<br/>port2: 203.0.113.6/30"]
         
         WANSW --- FW_MAIN
         WANSW --- FW_BACKUP
@@ -82,23 +85,23 @@ flowchart TD
     end
 
     subgraph Branch1_Site ["Branch 1 Site"]
-        FGT_BR1["FGT-Branch1<br/>port1: 203.0.113.14/30"]
+        FGT_BR1["Fortinet (FGT-Branch1)<br/>port1: 203.0.113.14/30"]
         WANBR1 --- FGT_BR1
-        SW_BR1["Branch 1 Switch (Node 16)"]
+        SW_BR1["Branch 1 Switch (Gi0/0)"]
         FGT_BR1 ---|port2 Trunk| SW_BR1
-        BR1_Users["VLAN 10 Users<br/>10.10.10.0/24"]
-        BR1_Servers["VLAN 20 Servers<br/>10.10.20.0/24"]
+        BR1_Users["VLAN 10 Users (10.10.10.0/24)<br/>VPC17 (Gi0/1) & VPC18 (Gi0/2)"]
+        BR1_Servers["VLAN 20 Servers (10.10.20.0/24)<br/>VPC19 (Gi1/0) & VPC20 (Gi0/3)"]
         SW_BR1 --- BR1_Users
         SW_BR1 --- BR1_Servers
     end
 
     subgraph Branch2_Site ["Branch 2 Site"]
-        FGT_BR2["FGT-Branch2<br/>port1: 203.0.113.22/30"]
+        FGT_BR2["Fortinet (FGT-Branch2)<br/>port1: 203.0.113.22/30"]
         WANBR2 --- FGT_BR2
-        SW_BR2["Branch 2 Switch (Node 24/32)"]
+        SW_BR2["Branch 2 Switch (Gi0/0)"]
         FGT_BR2 ---|port2 Trunk| SW_BR2
-        BR2_Users["VLAN 10 Users<br/>10.30.10.0/24"]
-        BR2_Servers["VLAN 20 Servers<br/>10.30.20.0/24"]
+        BR2_Users["VLAN 10 Users (10.30.10.0/24)<br/>VPC25 (Gi0/1) & VPC26 (Gi0/2)"]
+        BR2_Servers["VLAN 20 Servers (10.30.20.0/24)<br/>VPC27 (Gi1/0) & VPC28 (Gi0/3)"]
         SW_BR2 --- BR2_Users
         SW_BR2 --- BR2_Servers
     end
@@ -106,19 +109,19 @@ flowchart TD
     subgraph HQ_LAN ["HQ Micro-Segmented Core & Access"]
         CORE_HQ["Core-HQ Switch<br/>(Gi0/0 - Gi0/3 802.1Q Trunks)"]
         FW_MAIN ---|port2 Trunk| CORE_HQ
-        FW_BACKUP ---|port2 Trunk| CORE_HQ
+        FW_BACKUP ---|port1 Trunk| CORE_HQ
 
-        ACC_USER["HQ-ACC-USER (Switch 30)"]
-        ACC_SRV["HQ-ACC-SRV (Switch 29)"]
+        ACC_USER["HQ-ACC-USER (Switch Gi0/0)"]
+        ACC_SRV["HQ-ACC-SRV (Switch Gi0/0)"]
 
         CORE_HQ ---|Gi0/2 Trunk| ACC_USER
         CORE_HQ ---|Gi0/3 Trunk| ACC_SRV
 
-        VLAN10["VLAN 10: Users (192.168.10.0/24)<br/>DHCP Scope: .100 - .200"]
-        VLAN20["VLAN 20: Web Servers (192.168.20.0/24)<br/>VIP Exposed: 192.168.20.20:80"]
-        VLAN25["VLAN 25: Application/API (192.168.25.0/24)"]
-        VLAN27["VLAN 27: Database Tier (192.168.27.0/24)"]
-        VLAN30["VLAN 30: Network Mgmt (192.168.30.0/24)"]
+        VLAN10["VLAN 10 Users (192.168.10.0/24)<br/>PC1 (Gi0/1), PC2 (Gi0/2), Win (Gi0/3), PC4 (Gi1/0)"]
+        VLAN20["VLAN 20 Web (192.168.20.0/24)<br/>SRV1 (Gi0/1) - VIP: 8080->80"]
+        VLAN25["VLAN 25 API (192.168.25.0/24)<br/>API (Gi1/0)"]
+        VLAN27["VLAN 27 DB (192.168.27.0/24)<br/>DB (Gi0/2)"]
+        VLAN30["VLAN 30 Mgmt (192.168.30.0/24)<br/>Management (Gi0/3)"]
 
         ACC_USER --- VLAN10
         ACC_SRV --- VLAN20
@@ -130,9 +133,6 @@ flowchart TD
     FW_MAIN <-.->|"IPsec Tunnel 'To-BR1'"| FGT_BR1
     FW_MAIN <-.->|"IPsec Tunnel 'To-BR2'"| FGT_BR2
 ```
-
-### 2.2 HQ Lab Deployment Topology
-![Headquarters Topology](assets/topology_hq.png)
 
 ---
 
@@ -149,17 +149,17 @@ flowchart TD
 | `203.0.113.20/30` | BR2 WAN Link | WAN-BR2 Gi0/0 | `203.0.113.21` | FGT-Branch2 port1 | `203.0.113.22` |
 
 ### 3.2 Corporate LAN Micro-Segmentation Matrix
-| Site | VLAN ID | Segment Name | Subnet | Gateway IP | Hosts / Assignment | Firewall Interface |
+| Site | VLAN ID | Segment Name | Subnet | Gateway IP | Connected Hosts / Ports | Firewall Interface |
 | :--- | :---: | :--- | :--- | :--- | :--- | :--- |
-| **HQ** | **10** | HQ-Users-VLAN10 | `192.168.10.0/24` | `192.168.10.1` | DHCP: `.100` to `.200` | `port2.10` |
-| **HQ** | **20** | HQServersVLAN20 | `192.168.20.0/24` | `192.168.20.1` | Web Server (`.20`), VPC11 (`.10`) | `port2.20` |
-| **HQ** | **25** | HQServersVLAN25 | `192.168.25.0/24` | `192.168.25.1` | API Gateway / App Tier | `port2.25` |
-| **HQ** | **27** | HQServersVLAN27 | `192.168.27.0/24` | `192.168.27.1` | Database Node | `port2.27` |
-| **HQ** | **30** | HQManagVLAN30 | `192.168.30.0/24` | `192.168.30.1` | Admin Workstation (`.10`) | `port2.30` |
-| **BR1** | **10** | VLAN10-Users | `10.10.10.0/24` | `10.10.10.1` | End-user PCs | `port2.10` |
-| **BR1** | **20** | VLAN20-Servers | `10.10.20.0/24` | `10.10.20.1` | Server (`10.10.20.10`) published via VIP | `port2.20` |
-| **BR2** | **10** | VLAN10-Users | `10.30.10.0/24` | `10.30.10.1` | End-user PCs | `port2.10` |
-| **BR2** | **20** | VLAN20-Servers | `10.30.20.0/24` | `10.30.20.1` | Server (`10.30.20.10`) published via VIP | `port2.20` |
+| **HQ** | **10** | HQ-Users-VLAN10 | `192.168.10.0/24` | `192.168.10.1` | `PC1` (Gi0/1), `PC2` (Gi0/2), `Win` (Gi0/3), `PC4` (Gi1/0) | `port2.10` |
+| **HQ** | **20** | HQServersVLAN20 | `192.168.20.0/24` | `192.168.20.1` | `SRV1` (`192.168.20.20`, Gi0/1) | `port2.20` |
+| **HQ** | **25** | HQServersVLAN25 | `192.168.25.0/24` | `192.168.25.1` | `API` (`192.168.25.10`, Gi1/0) | `port2.25` |
+| **HQ** | **27** | HQServersVLAN27 | `192.168.27.0/24` | `192.168.27.1` | `DB` (`192.168.27.10`, Gi0/2) | `port2.27` |
+| **HQ** | **30** | HQManagVLAN30 | `192.168.30.0/24` | `192.168.30.1` | `Management` (`192.168.30.10`, Gi0/3) | `port2.30` |
+| **BR1** | **10** | VLAN10-Users | `10.10.10.0/24` | `10.10.10.1` | `VPC17` (Gi0/1), `VPC18` (Gi0/2) | `port2.10` |
+| **BR1** | **20** | VLAN20-Servers | `10.10.20.0/24` | `10.10.20.1` | `VPC19` (Gi1/0), `VPC20` (Gi0/3) | `port2.20` |
+| **BR2** | **10** | VLAN10-Users | `10.30.10.0/24` | `10.30.10.1` | `VPC25` (Gi0/1), `VPC26` (Gi0/2) | `port2.10` |
+| **BR2** | **20** | VLAN20-Servers | `10.30.20.0/24` | `10.30.20.1` | `VPC27` (Gi1/0), `VPC28` (Gi0/3) | `port2.20` |
 
 ---
 
@@ -194,15 +194,15 @@ To satisfy the capstone bonus requirements for professional enterprise design an
 [ Internet / WAN ]
        |
        v (VIP Port Forwarding 8080 -> 80)
-[ Presentation Tier: VLAN 20 ] (HQ-Web-Server: 192.168.20.20)
+[ Presentation Tier: VLAN 20 ] (SRV1: 192.168.20.20)
        |
        v Policy 10 (SRV-API): Authorized API queries only
-[ Application Tier: VLAN 25 ] (API Gateway: 192.168.25.10)
+[ Application Tier: VLAN 25 ] (API: 192.168.25.10)
        |
        v Policy 11 (DB-API): Database queries only
-[ Database Tier: VLAN 27 ] (Database: 192.168.27.10)
+[ Database Tier: VLAN 27 ] (DB: 192.168.27.10)
 
-* Direct access from Users (VLAN 10) or WAN (port1) to the Database Tier (VLAN 27) is DENIED.
+* Direct access from Users (PC1-4, Win) or WAN (port1) to the Database Tier (DB) is DENIED.
 ```
 
 ---
@@ -215,17 +215,17 @@ Route-based IPsec virtual tunnel interfaces interconnect all locations:
 
 ```mermaid
 sequenceDiagram
-    participant BR1 as Branch 1 (10.10.0.0/16)
+    participant BR1 as Branch 1 (VPC17: 10.10.10.0/24)
     participant HQ as HQ FortiGate (Hub)
-    participant BR2 as Branch 2 (10.30.0.0/16)
+    participant BR2 as Branch 2 (VPC27: 10.30.20.0/24)
 
     Note over BR1,HQ: IPsec Tunnel 'To-HQ' (203.0.113.14 <--> 203.0.113.6)
     Note over HQ,BR2: IPsec Tunnel 'To-BR2' (203.0.113.6 <--> 203.0.113.22)
 
-    BR1->>HQ: Encrypted packet to 10.30.10.50 via 'To-HQ'
+    BR1->>HQ: Encrypted packet to 10.30.20.10 via 'To-HQ'
     HQ->>HQ: Evaluates route table & transit policy 'vpn_To-BR1_local_0'
     HQ->>BR2: Forwards packet encrypted via 'To-BR2'
-    BR2-->>HQ: Encrypted reply packet to 10.10.10.50 via 'To-HQ'
+    BR2-->>HQ: Encrypted reply packet to 10.10.10.x via 'To-HQ'
     HQ-->>BR1: Forwards reply encrypted via 'To-BR1'
 ```
 
@@ -247,9 +247,9 @@ Next-Generation Security profiles are actively enforced on Internet egress and r
 
 | Location | VIP Object | External IP / Port | Internal Mapped IP / Port | Description |
 | :--- | :--- | :---: | :---: | :--- |
-| **HQ** | `HQ-Web-VIP-8080` | `203.0.113.6:8080` | `192.168.20.20:80` | External access to HQ Web Server |
+| **HQ** | `HQ-Web-VIP-8080` | `203.0.113.6:8080` | `192.168.20.20:80` | External access to HQ Web Server (`SRV1`) |
 | **BR1** | `VIP_Internal_Server` | `203.0.113.10:8080` | `10.10.20.10:80` | External access to Branch 1 Server |
-| **BR2** | `VIP-B2-Web-Server` | `203.0.113.22:8080` | `10.30.20.10:80` | External access to Branch 2 Web Server |
+| **BR2** | `VIP-B2-Web-Server` | `203.0.113.22:8080` | `10.30.20.10:80` | External access to Branch 2 Server |
 
 ```fortios
 # Headquarters VIP Configuration
@@ -271,7 +271,7 @@ end
 - **Gateway Endpoint:** FortiGate-HQ `port1` (`https://203.0.113.6:443`).
 - **IP Address Pool:** `SSLVPN-Tunnel-Range` (`10.212.134.200 - 10.212.134.210`).
 - **Portal Mode:** `full-access` (Tunnel Mode with full client gateway redirection).
-- **Access Policy:** Policy ID 4 (`SSLVPN-to-HQ-Web-Server`) restricts SSL-VPN clients exclusively to `192.168.20.20` on ports 80 (HTTP) and ICMP (PING), with full UTM inspection active.
+- **Access Policy:** Policy ID 4 (`SSLVPN-to-HQ-Web-Server`) restricts SSL-VPN clients exclusively to `SRV1` (`192.168.20.20`) on ports 80 (HTTP) and ICMP (PING), with full UTM inspection active.
 
 ---
 
@@ -281,21 +281,21 @@ All device configurations are version-controlled and archived in this repository
 
 | Device Hostname | Hardware / Image | Source File Location | Role |
 | :--- | :--- | :--- | :--- |
-| **Main-HQ** | FortiGate-VM64-KVM | [`Final/Main-HQ_7-0_0304_202610122020.conf`](Final/Main-HQ_7-0_0304_202610122020.conf) | Primary HQ Firewall (Active HA Master) |
+| **Main-HQ** | FortiGate-VM64-KVM | [`FWs-SW Backups/Main-HQ_7-0_0304_202610122020.conf`](FWs-SW%20Backups/Main-HQ_7-0_0304_202610122020.conf) | Primary HQ Firewall (Active HA Master) |
 | **Backup-HQ** | FortiGate-VM64-KVM | HA Sync from Main-HQ | Standby HQ Firewall (Hot-Backup) |
-| **FGT-Branch1** | FortiGate-VM64-KVM | [`Final/FGT-Branch1_7-0_0304_202610122020.conf`](Final/FGT-Branch1_7-0_0304_202610122020.conf) | Branch 1 Perimeter NGFW |
-| **FGT-Branch2** | FortiGate-VM64-KVM | [`Final/FortiGate-VM64-KVM_7-0_0304_202610122020.conf`](Final/FortiGate-VM64-KVM_7-0_0304_202610122020.conf) | Branch 2 Perimeter NGFW |
-| **ISP-HQ** | Cisco IOSv Router | `Backups Last/Default.zip` &rarr; `4.txt` | HQ Internet Service Provider Router |
-| **WAN-HQ** | Cisco IOSv Router | `Backups Last/Default.zip` &rarr; `3.txt` | HQ WAN Edge Router |
-| **Core-HQ** | Cisco IOSvL2 Switch | [`Switch Hq/Core-HQ.txt`](Switch%20Hq/Core-HQ.txt) / `5.txt` | Core 802.1Q VLAN Distribution Switch |
-| **HQ-ACC-SRV** | Cisco IOSvL2 Switch | [`Switch Hq/HQ-ACC-SRV.txt`](Switch%20Hq/HQ-ACC-SRV.txt) / `29.txt` | Access Switch for Servers & Management |
-| **HQ-ACC-USER** | Cisco IOSvL2 Switch | [`Switch Hq/HQ-ACC-USER.txt`](Switch%20Hq/HQ-ACC-USER.txt) / `30.txt` | Access Switch for Corporate Users |
-| **ISP-BR1** | Cisco IOSv Router | `Backups Last/Default.zip` &rarr; `13.txt` | Branch 1 ISP Router |
-| **WAN-BR1** | Cisco IOSv Router | `Backups Last/Default.zip` &rarr; `14.txt` | Branch 1 WAN Edge Router |
-| **Switch-BR1** | Cisco IOSvL2 Switch | `Backups Last/Default.zip` &rarr; `16.txt` | Branch 1 Access Switch |
-| **ISP-BR2** | Cisco IOSv Router | `Backups Last/Default.zip` &rarr; `21.txt` | Branch 2 ISP Router |
-| **WAN-BR2** | Cisco IOSv Router | `Backups Last/Default.zip` &rarr; `22.txt` | Branch 2 WAN Edge Router |
-| **Switch-BR2** | Cisco IOSvL2 Switch | `Backups Last/Default.zip` &rarr; `24.txt` / `32.txt` | Branch 2 Access Switch |
+| **FGT-Branch1** | FortiGate-VM64-KVM | [`FWs-SW Backups/FGT-Branch1_7-0_0304_202610122020.conf`](FWs-SW%20Backups/FGT-Branch1_7-0_0304_202610122020.conf) | Branch 1 Perimeter NGFW |
+| **FGT-Branch2** | FortiGate-VM64-KVM | [`FWs-SW Backups/FortiGate-VM64-KVM_7-0_0304_202610122020.conf`](FWs-SW%20Backups/FortiGate-VM64-KVM_7-0_0304_202610122020.conf) | Branch 2 Perimeter NGFW |
+| **ISP-HQ** | Cisco IOSv Router | [`HQ Routers/ISP-HQ Router.txt`](HQ%20Routers/ISP-HQ%20Router.txt) | HQ Internet Service Provider Router |
+| **WAN-HQ** | Cisco IOSv Router | [`HQ Routers/WAN-HQ Router.txt`](HQ%20Routers/WAN-HQ%20Router.txt) | HQ WAN Edge Router |
+| **Core-HQ** | Cisco IOSvL2 Switch | [`Switch Hq/Core-HQ.txt`](Switch%20Hq/Core-HQ.txt) | Core 802.1Q VLAN Distribution Switch |
+| **HQ-ACC-SRV** | Cisco IOSvL2 Switch | [`Switch Hq/HQ-ACC-SRV.txt`](Switch%20Hq/HQ-ACC-SRV.txt) | Access Switch for Servers & Management |
+| **HQ-ACC-USER** | Cisco IOSvL2 Switch | [`Switch Hq/HQ-ACC-USER.txt`](Switch%20Hq/HQ-ACC-USER.txt) | Access Switch for Corporate Users |
+| **ISP-BR1** | Cisco IOSv Router | `FWs-SW Backups/Other Assets Backups.zip` &rarr; `13.txt` | Branch 1 ISP Router |
+| **WAN-BR1** | Cisco IOSv Router | `FWs-SW Backups/Other Assets Backups.zip` &rarr; `14.txt` | Branch 1 WAN Edge Router |
+| **Switch-BR1** | Cisco IOSvL2 Switch | `FWs-SW Backups/Other Assets Backups.zip` &rarr; `16.txt` | Branch 1 Access Switch |
+| **ISP-BR2** | Cisco IOSv Router | `FWs-SW Backups/Other Assets Backups.zip` &rarr; `21.txt` | Branch 2 ISP Router |
+| **WAN-BR2** | Cisco IOSv Router | `FWs-SW Backups/Other Assets Backups.zip` &rarr; `22.txt` | Branch 2 WAN Edge Router |
+| **Switch-BR2** | Cisco IOSvL2 Switch | `FWs-SW Backups/Other Assets Backups.zip` &rarr; `24.txt` / `32.txt` | Branch 2 Access Switch |
 
 ---
 
@@ -344,10 +344,10 @@ During deployment and testing, several real-world engineering issues were encoun
 | **DHCP Allocations** | Main-HQ | `diagnose sys dhcp lease list` | Leases allocated within `192.168.10.100 - .200` |
 | **IPsec Phase 1** | Main-HQ | `diagnose vpn ike gateway list` | Status `ESTABLISHED` for `To-BR1` and `To-BR2` |
 | **IPsec Phase 2** | Main-HQ | `diagnose vpn tunnel list` | Status `active`, packet counters incrementing |
-| **Branch Transit** | BR1 PC | `ping 10.30.10.1` | 100% ping success to Branch 2 via HQ transit |
-| **VIP Forwarding** | External Client | `curl -I http://203.0.113.6:8080` | HTTP 200 OK returned from `192.168.20.20:80` |
-| **Outbound NAT** | HQ User PC | `ping 8.8.8.8` | 100% success; session table shows SNAT to `203.0.113.6` |
-| **Micro-Segmentation**| HQ User PC | `ping 192.168.27.10` | Request timed out (Blocked by Zero-Trust policy) |
+| **Branch Transit** | BR1 PC (`VPC17`) | `ping 10.30.20.10` | 100% ping success to Branch 2 via HQ transit |
+| **VIP Forwarding** | External Client | `curl -I http://203.0.113.6:8080` | HTTP 200 OK returned from `SRV1` (`192.168.20.20:80`) |
+| **Outbound NAT** | HQ User (`PC1`) | `ping 8.8.8.8` | 100% success; session table shows SNAT to `203.0.113.6` |
+| **Micro-Segmentation**| HQ User (`PC1`) | `ping 192.168.27.10` | Request timed out (Blocked by Zero-Trust policy) |
 
 ---
 
@@ -367,7 +367,7 @@ Alignment with all requirements defined in `Fortinet Capstone Project Requiremen
 | **NAT & Inbound VIP** | Outbound PAT + Destination Port Forwarding | **100% MET** | Public port 8080 translated to internal server port 80 |
 | **UTM Security Profiles** | Antivirus, IPS, Web Filter, App Control, SSL Inspection | **100% MET** | Applied on egress Policy 2 and remote access Policy 4 |
 | **Remote Access VPN** | SSL-VPN client tunnel mode with user authentication | **100% MET** | Configured on HQ WAN `port1` with resource restriction |
-| **Server Hardening (Bonus)**| 3-Tier Micro-segmentation: Web &rarr; API &rarr; Database | **BONUS MET**| Web (VLAN 20) &rarr; API (VLAN 25) &rarr; DB (VLAN 27) isolation |
+| **Server Hardening (Bonus)**| 3-Tier Micro-segmentation: Web &rarr; API &rarr; Database | **BONUS MET**| Web (`SRV1`) &rarr; API (`API`) &rarr; DB (`DB`) isolation |
 
 ---
 
@@ -375,33 +375,36 @@ Alignment with all requirements defined in `Fortinet Capstone Project Requiremen
 
 ```
 ├── README.md                                          <- You are here (GitHub Project Showcase)
-├── ENTERPRISE_NETWORK_SECURITY_CAPSTONE_DOCUMENTATION.md <- Complete Master Documentation
-├── ENTERPRISE_NETWORK_SECURITY_CAPSTONE_DOCUMENTATION.pdf<- Printable PDF Documentation
-├── Final/                                             <- Production FortiGate Configurations
-│   ├── Main-HQ_7-0_0304_202610122020.conf             <- Primary HQ Firewall
-│   ├── FGT-Branch1_7-0_0304_202610122020.conf         <- Branch 1 Firewall
-│   └── FortiGate-VM64-KVM_7-0_0304_202610122020.conf <- Branch 2 Firewall
-├── Switch Hq/                                         <- Cisco Core & Access Switch Configs
-│   ├── Core-HQ.txt                                    <- Core Distribution Switch
-│   ├── HQ-ACC-SRV.txt                                 <- Server/Management Access Switch
-│   └── HQ-ACC-USER.txt                                <- User Access Switch
-├── Backups Last/                                      <- Raw Cisco Device Backups
-│   └── Default.zip                                    <- Startup configs for all 12 Cisco nodes
-├── Firewall Intil config/                             <- Initial Routing & VLAN Plans
-│   ├── Static_Routes_Plan.md                          <- Detailed Static Routing Blueprint
-│   └── VLANs.txt                                      <- VLAN Sub-interface Creation Guides
-├── troubleshooting/                                   <- Troubleshooting Notes & Proof Screenshots
-│   ├── FW BR1 static routs.png
-│   ├── HA.png
-│   └── network_lab_troubleshooting_summary.pdf
-└── assets/                                            <- Diagrams & Screenshots for GitHub
-    ├── topology_hq.png
-    └── ha_failover.png
+├── ENTERPRISE_NETWORK_SECURITY_CAPSTONE_DOCUMENTATION.md <- Master Engineering Documentation
+├── ENTERPRISE_NETWORK_SECURITY_CAPSTONE_DOCUMENTATION.pdf<- Printable Evaluation PDF
+├── assets/                                            <- Diagrams & Architecture Visuals
+│   ├── Final Topology.png                             <- Complete High-Resolution Network Topology
+│   ├── topology.png                                   <- Standard Topology Diagram
+│   ├── topology_hq.png                                <- Detailed HQ Perimeter Diagram
+│   └── ha_failover.png                                <- HA Active-Passive Failover Evidence
+├── FWs-SW Backups/                                    <- Production Firewall & Switch Backups
+│   ├── Main-HQ_7-0_0304_202610122020.conf             <- Primary HQ FortiGate Configuration
+│   ├── FGT-Branch1_7-0_0304_202610122020.conf         <- Branch 1 FortiGate Configuration
+│   ├── FortiGate-VM64-KVM_7-0_0304_202610122020.conf <- Branch 2 FortiGate Configuration
+│   └── Other Assets Backups.zip                       <- Raw Backups for all 12 Cisco Routers/Switches
+├── HQ Routers/                                        <- Headquarters Cisco Router Configurations
+│   ├── ISP-HQ Router.txt                              <- ISP-HQ Cisco IOS Configuration
+│   └── WAN-HQ Router.txt                              <- WAN-HQ Cisco IOS Configuration
+├── HQ Firewall Intil config/                          <- Initial Setup & Planning Reference
+│   ├── Primary FortiGate.txt                          <- Primary Firewall Boot Configuration
+│   ├── Secondary FortiGate.txt                        <- Secondary Firewall Boot Configuration
+│   ├── Static_Routes_Plan.md                          <- Static Routing Blueprint
+│   ├── To make Net -ISP.txt                           <- Provider Core NAT Blueprint
+│   └── VLANs.txt                                      <- Sub-interface Creation Guides
+└── Switch Hq/                                         <- Headquarters Cisco Switch Scripts
+    ├── Core-HQ.txt                                    <- Core Distribution Switch Setup Script
+    ├── HQ-ACC-SRV.txt                                 <- Server Access Switch Setup Script
+    └── HQ-ACC-USER.txt                                <- User Access Switch Setup Script
 ```
 
 ### Deployment Instructions (PNETLab / EVE-NG)
-1. **Import Cisco Devices:** Extract `Backups Last/Default.zip` and paste the respective startup-config into each Cisco node (`3.txt` for `WAN-HQ`, `4.txt` for `ISP-HQ`, `5.txt` for `Core-HQ`, etc.).
-2. **Import FortiGate Appliances:** Boot each FortiGate VM node (`FortiOS 7.0.4`), access the console or management IP, and restore the configuration file from `Final/` via the Web GUI (`System -> Settings -> Restore`) or CLI (`execute restore config tftp/ftp/usb`).
+1. **Import Cisco Devices:** Extract `FWs-SW Backups/Other Assets Backups.zip` and paste the respective startup-config into each Cisco node (`3.txt` for `WAN-HQ`, `4.txt` for `ISP-HQ`, `5.txt` for `Core-HQ`, etc.), or use the individual files in `HQ Routers/` and `Switch Hq/`.
+2. **Import FortiGate Appliances:** Boot each FortiGate VM node (`FortiOS 7.0.4`), access the console or management IP, and restore the configuration file from `FWs-SW Backups/` via the Web GUI (`System -> Settings -> Restore`) or CLI (`execute restore config tftp/ftp/usb`).
 3. **Configure Windows Host Route:** In an administrative PowerShell terminal, execute:
    ```powershell
    route -p add 203.0.113.0 mask 255.255.255.248 192.168.85.201

@@ -9,7 +9,7 @@
 - **Environment:** PNETLab / EVE-NG Network Simulation
 - **Firewall Operating System:** FortiOS v7.0.4 (FortiGate-VM64-KVM)
 - **Routing & Switching Platforms:** Cisco IOS Software (IOSv / IOSvL2)
-- **Document Version:** 1.0 (Final Production Release)
+- **Document Version:** 2.0 (Updated to match Final Production Topology & Folder Structure)
 - **Date:** October 2026
 
 ---
@@ -36,12 +36,12 @@ The core perimeter security, traffic segmentation, and threat mitigation are pro
                     |    WAN Switch     |               |                         |
                     +---------+---------+               |                         |
                      /                 \                |                         |
-             [port1]|                   |[port1] [port1]|                  [port1]|
+             [port1]|                   |[port2] [port1]|                  [port1]|
         +-----------+----+         +----+-----------+   |                         |
         | Main-HQ (FW)   |  HA HB  | Backup-HQ (FW) |   |                         |
         | Priority: 200  |=========| Priority: 100  |   |                         |
         +-----------+----+ port3/4 +----+-----------+   |                         |
-             [port2]|                   |[port2]        |                         |
+             [port2]|                   |[port1]        |                         |
                     \                   /               |                         |
                     +---------+---------+               |                         |
                     |      Core-HQ      |               |                         |
@@ -50,17 +50,19 @@ The core perimeter security, traffic segmentation, and threat mitigation are pro
              Gi0/2  /                   \ Gi0/3         |                         |
         HQ-ACC-USER               HQ-ACC-SRV       FGT-Branch1               FGT-Branch2
         (VLAN 10)                 (VLAN 20/25/     (VLAN 10/20)              (VLAN 10/20)
-                                   27/30)               |                         |
-                                                    Switch 16                 Switch 24
+       /  |   |  \                 27/30)               |                         |
+     PC1 PC2 Win PC4             /  |   |   \        Switch 16                 Switch 24/32
+                              SRV1 API  DB  Mgmt    /    |    \    \          /    |    \    \
+                                                   VPC17 18   19   20        VPC25 26   27   28
 ```
 
 ### Key Engineering Objectives Achieved
 1. **High Availability (HA) Active-Passive Clustering:** Redundant FortiGate deployment at HQ featuring sub-second stateful failover, dedicated dual heartbeat links (`port3` & `port4`), synchronized connection tables, and shared virtual MAC addresses.
-2. **Zero-Trust Multi-Tier LAN Micro-Segmentation:** Layer 2 / Layer 3 isolation separating Users (VLAN 10), Web Servers (VLAN 20), Application/API Services (VLAN 25), Database Services (VLAN 27), and Out-of-Band Management (VLAN 30), terminating on FortiGate 802.1Q sub-interfaces.
+2. **Zero-Trust Multi-Tier LAN Micro-Segmentation:** Layer 2 / Layer 3 isolation separating Users (VLAN 10: `PC1`, `PC2`, `Win`, `PC4`), Web Servers (VLAN 20: `SRV1`), Application/API Services (VLAN 25: `API`), Database Services (VLAN 27: `DB`), and Out-of-Band Management (VLAN 30: `Management`), terminating on FortiGate 802.1Q sub-interfaces.
 3. **Hub-and-Spoke Site-to-Site IPsec VPN Architecture:** Route-based IPsec tunnels between HQ and Branch 1 (`To-BR1`), and HQ and Branch 2 (`To-BR2`), with transit routing enabled on the HQ hub to facilitate secure Branch-to-Branch intercommunication without direct branch-to-branch mesh links.
 4. **Unified Threat Management (UTM) & Next-Gen Security Profiles:** Layer 7 deep packet inspection including Antivirus, Intrusion Prevention System (IPS), Web Filtering, Application Control, and SSL Certificate Inspection applied across Internet egress and inter-site VPN policies.
 5. **Network Address Translation (NAT) & Server Publishing (VIP):** Source NAT (PAT/Overload) for outbound LAN internet access, coupled with Virtual IP (VIP) destination port-forwarding exposing internal servers (`TCP 8080 -> 80`) securely to the public WAN.
-6. **Remote Access SSL-VPN:** Full-tunnel and web portal client-to-site VPN gateway configured on HQ WAN (`port1`), enforcing authentication, dedicated address assignment (`SSLVPN-Tunnel-Range`), and firewall policies controlling access to the server tier.
+6. **Remote Access SSL-VPN:** Full-tunnel client-to-site VPN gateway configured on HQ WAN (`port1`), enforcing authentication, dedicated address assignment (`SSLVPN-Tunnel-Range`), and firewall policies controlling access to the server tier.
 
 ---
 
@@ -68,7 +70,7 @@ The core perimeter security, traffic segmentation, and threat mitigation are pro
 
 The addressing design utilizes **RFC 5737 (203.0.113.0/24)** for public WAN point-to-point interconnects and standard **RFC 1918 (10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16)** private spaces for internal segmentation.
 
-### 2.1 Management & Internet Simulation Cloud (Cloud0)
+### 2.1 Management & Internet Simulation Cloud (Net / Cloud0)
 | Device | Interface | IP Address | Subnet Mask | Gateway | Description |
 | :--- | :--- | :--- | :--- | :--- | :--- |
 | **PNETLab VM** | pnet0 | `192.168.85.128` | `255.255.255.0` (/24) | `192.168.85.2` | Lab hypervisor host management |
@@ -87,23 +89,23 @@ The addressing design utilizes **RFC 5737 (203.0.113.0/24)** for public WAN poin
 | `203.0.113.20/30` | BR2 WAN Link | WAN-BR2 Gi0/0 | `203.0.113.21` | FGT-Branch2 port1 | `203.0.113.22` |
 
 ### 2.3 Headquarters (HQ) LAN Segmentation Matrix
-| VLAN ID | Segment Name | Subnet | FortiGate Gateway | DHCP Scope / Host IPs | Member Interface | Description |
+| VLAN ID | Segment Name | Subnet | FortiGate Gateway | Connected Hosts / Switch Ports | Member Interface | Description |
 | :---: | :--- | :--- | :--- | :--- | :--- | :--- |
-| **10** | HQ-Users-VLAN10 | `192.168.10.0/24` | `192.168.10.1` | `192.168.10.100 - .200` (DHCP) | `port2.10` | Corporate end-user workstations |
-| **20** | HQServersVLAN20 | `192.168.20.0/24` | `192.168.20.1` | `192.168.20.20` (Web), `.10` (VPC) | `port2.20` | Public-facing / Web servers |
-| **25** | HQServersVLAN25 | `192.168.25.0/24` | `192.168.25.1` | `192.168.25.10` (API Gateway) | `port2.25` | Application & API processing tier |
-| **27** | HQServersVLAN27 | `192.168.27.0/24` | `192.168.27.1` | `192.168.27.10` (Database Node) | `port2.27` | Backend database storage tier |
-| **30** | HQManagVLAN30 | `192.168.30.0/24` | `192.168.30.1` | `192.168.30.10` (Admin PC) | `port2.30` | Secure network management zone |
+| **10** | HQ-Users-VLAN10 | `192.168.10.0/24` | `192.168.10.1` | `PC1` (Gi0/1), `PC2` (Gi0/2), `Win` (Gi0/3), `PC4` (Gi1/0) | `port2.10` | Corporate user workstations (DHCP: `.100-.200`) |
+| **20** | HQServersVLAN20 | `192.168.20.0/24` | `192.168.20.1` | `SRV1` (`192.168.20.20`, Switch port Gi0/1) | `port2.20` | Public-facing Web presentation tier |
+| **25** | HQServersVLAN25 | `192.168.25.0/24` | `192.168.25.1` | `API` (`192.168.25.10`, Switch port Gi1/0) | `port2.25` | Application & API processing tier |
+| **27** | HQServersVLAN27 | `192.168.27.0/24` | `192.168.27.1` | `DB` (`192.168.27.10`, Switch port Gi0/2) | `port2.27` | Backend database storage tier |
+| **30** | HQManagVLAN30 | `192.168.30.0/24` | `192.168.30.1` | `Management` (`192.168.30.10`, Switch port Gi0/3) | `port2.30` | Out-of-band network management zone |
 | **—** | HA Heartbeat 1 | `169.254.0.0/30` | `169.254.0.1` | `169.254.0.2` | `port3` | Primary HA heartbeat channel |
 | **—** | HA Heartbeat 2 | `169.254.0.0/30` | `169.254.0.3` | `169.254.0.4` | `port4` | Secondary HA synchronization channel |
 
 ### 2.4 Branch 1 & Branch 2 LAN Segmentation Matrix
-| Site | VLAN ID | Name | Subnet | Gateway | Hosts / VIP Mapped | Firewall Interface |
-| :--- | :---: | :--- | :--- | :--- | :--- | :--- |
-| **Branch 1** | **10** | VLAN10-Users | `10.10.10.0/24` | `10.10.10.1` | End-user PCs | `port2.10` |
-| **Branch 1** | **20** | VLAN20-Servers | `10.10.20.0/24` | `10.10.20.1` | Server: `10.10.20.10` | `port2.20` |
-| **Branch 2** | **10** | VLAN10-Users | `10.30.10.0/24` | `10.30.10.1` | End-user PCs | `port2.10` |
-| **Branch 2** | **20** | VLAN20-Servers | `10.30.20.0/24` | `10.30.20.1` | Server: `10.30.20.10` | `port2.20` |
+| Site | VLAN ID | Name | Subnet | Gateway | Hosts / VIP Mapped | Switch Ports | Firewall Interface |
+| :--- | :---: | :--- | :--- | :--- | :--- | :--- | :--- |
+| **Branch 1** | **10** | VLAN10-Users | `10.10.10.0/24` | `10.10.10.1` | `VPC17`, `VPC18` | Gi0/1, Gi0/2 | `port2.10` |
+| **Branch 1** | **20** | VLAN20-Servers | `10.10.20.0/24` | `10.10.20.1` | `VPC19`, `VPC20` (VIP: `10.10.20.10`) | Gi1/0, Gi0/3 | `port2.20` |
+| **Branch 2** | **10** | VLAN10-Users | `10.30.10.0/24` | `10.30.10.1` | `VPC25`, `VPC26` | Gi0/1, Gi0/2 | `port2.10` |
+| **Branch 2** | **20** | VLAN20-Servers | `10.30.20.0/24` | `10.30.20.1` | `VPC27`, `VPC28` (VIP: `10.30.20.10`) | Gi1/0, Gi0/3 | `port2.20` |
 
 ---
 
@@ -121,7 +123,7 @@ To eliminate single points of failure at corporate headquarters, the HQ security
                             |       WAN Switch         |
                             +--------------------------+
                              /                        \
-                     port1  /                          \  port1
+                     port1  /                          \  port2
               (203.0.113.6)/                            \(203.0.113.6)
             +-------------+--------------+        +-----+----------------------+
             |   Main-HQ (Primary Node)   |        | Backup-HQ (Secondary Node)  |
@@ -132,7 +134,7 @@ To eliminate single points of failure at corporate headquarters, the HQ security
                     ======+=============================+======
                     port4 |  Heartbeat 2 (Priority 50)  | port4
                           \                             /
-                     port2 \                           / port2
+                     port2 \                           / port1
                             +-------------------------+
                             |      Core-HQ Switch     |
                             +-------------------------+
@@ -185,7 +187,7 @@ end
 +---------------------------------------------------------------------------------------+
 |                                ROUTING FLOW ARCHITECTURE                              |
 +---------------------------------------------------------------------------------------+
-|  Branch 1 User (10.10.10.50)                                                          |
+|  Branch 1 User (VPC17: 10.10.10.50)                                                   |
 |       |                                                                               |
 |       v (Default Gateway: 10.10.10.1)                                                 |
 |  FortiGate-BR1                                                                        |
@@ -203,7 +205,7 @@ end
 |                                            FortiGate-BR2                              |
 |                                                    |                                  |
 |                                                    v                                  |
-|                                            Branch 2 Server (10.30.20.10)              |
+|                                            Branch 2 Server (VPC27: 10.30.20.10)       |
 +---------------------------------------------------------------------------------------+
 ```
 
@@ -273,50 +275,6 @@ config router static
 end
 ```
 
-### 4.3 Cisco ISP & WAN Static Routes
-#### ISP-HQ (`192.168.85.201`)
-```cisco
-ip route 0.0.0.0 0.0.0.0 192.168.85.2
-ip route 203.0.113.4 255.255.255.252 203.0.113.2
-ip route 203.0.113.8 255.255.255.252 192.168.85.202
-ip route 203.0.113.12 255.255.255.252 192.168.85.202
-ip route 203.0.113.16 255.255.255.252 192.168.85.203
-ip route 203.0.113.20 255.255.255.252 192.168.85.203
-```
-
-#### WAN-HQ (`203.0.113.2` / `203.0.113.5`)
-```cisco
-ip route 0.0.0.0 0.0.0.0 203.0.113.1
-```
-
-#### ISP-BR1 (`192.168.85.202`) & WAN-BR1 (`203.0.113.10` / `203.0.113.13`)
-```cisco
-! ISP-BR1
-ip route 0.0.0.0 0.0.0.0 192.168.85.2
-ip route 203.0.113.0 255.255.255.252 192.168.85.201
-ip route 203.0.113.4 255.255.255.252 192.168.85.201
-ip route 203.0.113.12 255.255.255.252 203.0.113.10
-ip route 203.0.113.16 255.255.255.252 192.168.85.203
-ip route 203.0.113.20 255.255.255.252 192.168.85.203
-
-! WAN-BR1
-ip route 0.0.0.0 0.0.0.0 203.0.113.9
-```
-
-#### ISP-BR2 (`192.168.85.203`) & WAN-BR2 (`203.0.113.18` / `203.0.113.21`)
-```cisco
-! ISP-BR2
-ip route 0.0.0.0 0.0.0.0 192.168.85.2
-ip route 203.0.113.0 255.255.255.252 192.168.85.201
-ip route 203.0.113.4 255.255.255.252 192.168.85.201
-ip route 203.0.113.8 255.255.255.252 192.168.85.202
-ip route 203.0.113.12 255.255.255.252 192.168.85.202
-ip route 203.0.113.20 255.255.255.252 203.0.113.18
-
-! WAN-BR2
-ip route 0.0.0.0 0.0.0.0 203.0.113.17
-```
-
 ---
 
 ## 5. IPsec Site-to-Site VPN Implementation
@@ -355,68 +313,6 @@ A secure Hub-and-Spoke topology connects the distributed sites over untrusted pu
 | **Key Lifetime** | 86,400 seconds (24 hours) | 43,200 seconds (12 hours) |
 | **Dead Peer Detection (DPD)** | Enabled (Interval: 20s, Retry: 3) | N/A |
 
-### 5.2 Hub Configuration (Main-HQ)
-```fortios
-# Phase 1 Interfaces
-config vpn ipsec phase1-interface
-    edit "To-BR1"
-        set interface "port1"
-        set peertype any
-        set net-device disable
-        set proposal des-md5 des-sha1
-        set remote-gw 203.0.113.14
-        set psksecret <enc_key>
-    next
-    edit "To-BR2"
-        set interface "port1"
-        set peertype any
-        set net-device disable
-        set proposal des-sha256
-        set remote-gw 203.0.113.22
-        set psksecret <enc_key>
-    next
-end
-
-# Phase 2 Interfaces
-config vpn ipsec phase2-interface
-    edit "To-BR1"
-        set phase1name "To-BR1"
-        set proposal des-md5 des-sha1
-    next
-    edit "To-BR2"
-        set phase1name "To-BR2"
-        set proposal des-md5 des-sha1
-    next
-end
-```
-
-### 5.3 Spoke Configuration (FGT-Branch1 & FGT-Branch2)
-```fortios
-# Branch 1
-config vpn ipsec phase1-interface
-    edit "To-HQ"
-        set interface "port1"
-        set peertype any
-        set net-device disable
-        set proposal des-md5 des-sha1
-        set remote-gw 203.0.113.6
-        set psksecret <enc_key>
-    next
-end
-
-# Branch 2
-config vpn ipsec phase1-interface
-    edit "To-HQ"
-        set interface "port1"
-        set peertype any
-        set net-device disable
-        set proposal des-sha256
-        set remote-gw 203.0.113.6
-        set psksecret <enc_key>
-    next
-end
-```
-
 ---
 
 ## 6. Firewall Security Policies & Zero-Trust Segmentation
@@ -432,17 +328,17 @@ All network flows are governed by stateful firewall policies adhering to the **P
 | **5** | `vpn_To-BR1_local_0` | `HQ-Users-VLAN10`, `To-BR1` | `To-BR1`, `HQ-Users-VLAN10` | `To-BR1,2_local`, `To-BR1_remote` | `To-BR1_remote`, `To-BR1,2_local` | ALL | ACCEPT | OFF | Bi-directional Branch 1 User VPN |
 | **6** | `vpn_To-BR1_local_1` | `HQServersVLAN20`, `To-BR1`| `To-BR1`, `HQServersVLAN20` | `To-BR1,2_local`, `To-BR1_remote` | `To-BR1_remote`, `To-BR1,2_local` | ALL | ACCEPT | OFF | Bi-directional Branch 1 Server VPN |
 | **9** | `InterVLAN-All` | `HQ-Users-VLAN10`, `HQServersVLAN20`, `HQManagVLAN30` | `HQManagVLAN30`, `HQServersVLAN20`, `HQ-Users-VLAN10` | `all` | `all` | ALL | ACCEPT | OFF | Internal Segment Connectivity |
-| **10**| `SRV-API` | `HQServersVLAN20` | `HQServersVLAN25` | `all` | `all` | ALL | ACCEPT | OFF | Web-to-API Layer Communication |
-| **11**| `DB-API` | `HQServersVLAN27` | `HQServersVLAN25` | `all` | `all` | ALL | ACCEPT | OFF | DB-to-API Layer Communication |
+| **10**| `SRV-API` | `HQServersVLAN20` | `HQServersVLAN25` | `all` | `all` | ALL | ACCEPT | OFF | Web-to-API Layer Communication (`SRV1` -> `API`) |
+| **11**| `DB-API` | `HQServersVLAN27` | `HQServersVLAN25` | `all` | `all` | ALL | ACCEPT | OFF | DB-to-API Layer Communication (`DB` -> `API`) |
 | **12**| `HQ-to-BR2` | `HQ-Users-VLAN10`, `To-BR2` | `To-BR2`, `HQ-Users-VLAN10` | `To-BR1,2_local`, `To-BR2-Remote` | `To-BR1,2_local`, `To-BR2-Remote` | ALL | ACCEPT | OFF | Bi-directional Branch 2 User VPN |
 | **13**| `BR2-to-HQ` | `To-BR2`, `HQServersVLAN20`| `HQServersVLAN20`, `To-BR2` | `To-BR1,2_local`, `To-BR2-Remote` | `To-BR1,2_local`, `To-BR2-Remote` | ALL | ACCEPT | OFF | Bi-directional Branch 2 Server VPN |
 
 ### 6.2 Micro-Segmentation Deep Dive (3-Tier Application Model)
 To demonstrate server hardening and defense-in-depth:
-- **Presentation Tier (VLAN 20):** Contains `HQ-Web-Server` (`192.168.20.20`), directly reachable from WAN through VIP port 8080.
-- **Application/API Tier (VLAN 25):** Contains middle-tier API services (`192.168.25.10`). Web servers communicate with this tier under Policy 10 (`SRV-API`).
-- **Database Tier (VLAN 27):** Houses core relational databases (`192.168.27.10`). Reached exclusively by the API tier via Policy 11 (`DB-API`).
-- **Isolation:** Direct connectivity from Users (VLAN 10) or WAN (`port1`) to the Database Tier (VLAN 27) is blocked at Layer 3/4. Compromising the public web server prevents immediate lateral movement to sensitive database records.
+- **Presentation Tier (VLAN 20):** Contains `SRV1` (`192.168.20.20`), directly reachable from WAN through VIP port 8080.
+- **Application/API Tier (VLAN 25):** Contains middle-tier API services (`API`: `192.168.25.10`). Web servers communicate with this tier under Policy 10 (`SRV-API`).
+- **Database Tier (VLAN 27):** Houses core relational databases (`DB`: `192.168.27.10`). Reached exclusively by the API tier via Policy 11 (`DB-API`).
+- **Isolation:** Direct connectivity from Users (`PC1-4`, `Win`) or WAN (`port1`) to the Database Tier (`DB`) is blocked at Layer 3/4. Compromising the public web server prevents immediate lateral movement to sensitive database records.
 
 ---
 
@@ -467,7 +363,7 @@ To securely expose internal services without publishing real private IP addresse
 +-------------------------------+
         |
         v
-[ Internal Web Server (192.168.20.20) ] (Listening on Port 80)
+[ Internal Web Server 'SRV1' (192.168.20.20) ] (Listening on Port 80)
 ```
 
 ```fortios
@@ -510,23 +406,7 @@ end
 
 ---
 
-## 8. Remote Access VPN (SSL-VPN) Implementation
-
-Off-site teleworkers and traveling administrators securely connect to headquarters via FortiClient SSL-VPN.
-
-### 8.1 SSL-VPN Configuration Parameters
-- **Gateway Interface:** `port1` (`203.0.113.6`)
-- **Listening Port:** 443 / default HTTPS
-- **Assigned IP Pool:** `SSLVPN-Tunnel-Range` (`10.212.134.200 - 10.212.134.210`)
-- **Authentication Method:** Local user database with PAP/MS-CHAPv2
-- **Portal Mode:** `full-access` (Tunnel Mode with split-tunneling disabled for maximum data leak protection)
-- **Encryption Algorithm:** TLS 1.3 / TLS 1.2 with AES-GCM
-- **Certificate:** `Fortinet_Factory` (RSA 2048-bit)
-- **Authorized Policy:** Policy ID 4 (`SSLVPN-to-HQ-Web-Server`) restricts SSL-VPN clients exclusively to `192.168.20.20` on ports 80 (HTTP) and ICMP (PING), with full UTM inspection active.
-
----
-
-## 9. Layer 2 Switching Architecture & VLAN Configuration
+## 8. Layer 2 Switching Architecture & VLAN Configuration
 
 The switching layer is structured into Core and Access layers using Cisco Catalyst IOSvL2 switches:
 
@@ -541,13 +421,13 @@ The switching layer is structured into Core and Access layers using Cisco Cataly
               | Gi0/2                               | Gi0/3
         [ HQ-ACC-USER ]                       [ HQ-ACC-SRV ]
         Gi0/0: Trunk                          Gi0/0: Trunk
-        Gi0/1 - Gi1/0: Access VLAN 10         Gi0/1: Access VLAN 20 (Web)
-                                              Gi1/0: Access VLAN 25 (API)
-                                              Gi0/2: Access VLAN 27 (DB)
-                                              Gi0/3: Access VLAN 30 (Mgmt)
+        Gi0/1: PC1 (VLAN 10)                  Gi0/1: SRV1 (VLAN 20 Web)
+        Gi0/2: PC2 (VLAN 10)                  Gi1/0: API (VLAN 25 API)
+        Gi0/3: Win (VLAN 10)                  Gi0/2: DB (VLAN 27 DB)
+        Gi1/0: PC4 (VLAN 10)                  Gi0/3: Management (VLAN 30)
 ```
 
-### 9.1 Core-HQ Switch (`Core-HQ`)
+### 8.1 Core-HQ Switch (`Core-HQ`)
 ```cisco
 hostname Core-HQ
 !
@@ -569,7 +449,7 @@ interface range GigabitEthernet0/0 - 3
  no shutdown
 ```
 
-### 9.2 Server Access Switch (`HQ-ACC-SRV`)
+### 8.2 Server Access Switch (`HQ-ACC-SRV`)
 ```cisco
 hostname HQ-ACC-SRV
 !
@@ -602,7 +482,7 @@ interface GigabitEthernet0/3
  no shutdown
 ```
 
-### 9.3 User Access Switch (`HQ-ACC-USER`)
+### 8.3 User Access Switch (`HQ-ACC-USER`)
 ```cisco
 hostname HQ-ACC-USER
 !
@@ -622,13 +502,46 @@ interface range GigabitEthernet0/1 - 3, GigabitEthernet1/0
 
 ---
 
-## 10. Engineering Troubleshooting Log & Incident Post-Mortem
+## 9. File & Folder Organization Mapping
 
-During the design, deployment, and testing phases of this capstone lab, several critical networking and platform challenges were encountered and methodically solved:
+All project deliverables have been organized into the following production folder structure:
+
+```
+├── README.md                                          <- GitHub Project Showcase & Quickstart
+├── ENTERPRISE_NETWORK_SECURITY_CAPSTONE_DOCUMENTATION.md <- Master Engineering Documentation
+├── ENTERPRISE_NETWORK_SECURITY_CAPSTONE_DOCUMENTATION.pdf<- Printable Evaluation PDF
+├── assets/                                            <- Diagrams & Architecture Visuals
+│   ├── Final Topology.png                             <- Complete High-Resolution Network Topology
+│   ├── topology.png                                   <- Standard Topology Diagram
+│   ├── topology_hq.png                                <- Detailed HQ Perimeter Diagram
+│   └── ha_failover.png                                <- HA Active-Passive Failover Evidence
+├── FWs-SW Backups/                                    <- Production Firewall & Switch Backups
+│   ├── Main-HQ_7-0_0304_202610122020.conf             <- Primary HQ FortiGate Configuration
+│   ├── FGT-Branch1_7-0_0304_202610122020.conf         <- Branch 1 FortiGate Configuration
+│   ├── FortiGate-VM64-KVM_7-0_0304_202610122020.conf <- Branch 2 FortiGate Configuration
+│   └── Other Assets Backups.zip                       <- Raw Backups for all 12 Cisco Routers/Switches
+├── HQ Routers/                                        <- Headquarters Cisco Router Configurations
+│   ├── ISP-HQ Router.txt                              <- ISP-HQ Cisco IOS Configuration
+│   └── WAN-HQ Router.txt                              <- WAN-HQ Cisco IOS Configuration
+├── HQ Firewall Intil config/                          <- Initial Setup & Planning Reference
+│   ├── Primary FortiGate.txt                          <- Primary Firewall Boot Configuration
+│   ├── Secondary FortiGate.txt                        <- Secondary Firewall Boot Configuration
+│   ├── Static_Routes_Plan.md                          <- Static Routing Blueprint
+│   ├── To make Net -ISP.txt                           <- Provider Core NAT Blueprint
+│   └── VLANs.txt                                      <- Sub-interface Creation Guides
+└── Switch Hq/                                         <- Headquarters Cisco Switch Scripts
+    ├── Core-HQ.txt                                    <- Core Distribution Switch Setup Script
+    ├── HQ-ACC-SRV.txt                                 <- Server Access Switch Setup Script
+    └── HQ-ACC-USER.txt                                <- User Access Switch Setup Script
+```
+
+---
+
+## 10. Engineering Troubleshooting Log & Incident Post-Mortem
 
 ### Incident 1: Cloud0 IP Conflict (`DUPADDR`) & Static Route Shadowing
 - **Symptoms:** `%IP-4-DUPADDR: Duplicate address 192.168.85.201 on GigabitEthernet0/0` followed by ping dropouts to `8.8.8.8` and route configuration rejection `IP address conflicts with gateway ip address in static routing table`.
-- **Root Cause:** Both the virtual lab node `ISP-HQ` and an overlapping network device had claimed `192.168.85.201` on the VMware NAT adapter bridge. Additionally, when attempting to change the IP address to `192.168.85.202`, Cisco IOS detected that `192.168.85.202` was already defined as a static route next-hop for Branch 1 subnets (`203.0.113.8/30`).
+- **Root Cause:** Both the virtual lab node `ISP-HQ` and an overlapping network device claimed `192.168.85.201` on the VMware NAT adapter bridge. Additionally, when attempting to change the IP address to `192.168.85.202`, Cisco IOS detected that `192.168.85.202` was already defined as a static route next-hop for Branch 1 subnets (`203.0.113.8/30`).
 - **Remediation:** 
   1. Removed stale static routes conflicting with the interface IP.
   2. Stabilized the Cloud0 management map: `ISP-HQ` (`.201`), `ISP-BR1` (`.202`), and `ISP-BR2` (`.203`).
@@ -647,7 +560,7 @@ During the design, deployment, and testing phases of this capstone lab, several 
 - **Symptoms:** Following secondary node takeover and primary restoration, FortiGate Web GUI was inaccessible at `https://203.0.113.6`.
 - **Root Cause:** Upon filesystem re-initialization, `port1` reverted to factory default `mode dhcp` with IP `0.0.0.0/0`, dropping the static IP assignment.
 - **Remediation:**
-  Executed recovery commands on the console:
+  Re-assigned static interface parameters via console CLI:
   ```fortios
   config system interface
       edit "port1"
@@ -657,7 +570,7 @@ During the design, deployment, and testing phases of this capstone lab, several 
       next
   end
   ```
-  Immediately synchronized HA state to secondary, restoring the virtual IP and cluster connectivity.
+  Immediately synchronized HA state to secondary, restoring cluster connectivity.
 
 ### Incident 4: Windows Host Route Redirection & Multi-Hop Lab Access
 - **Symptoms:** Windows administrator workstation unable to reach the FortiGate Web GUIs at `203.0.113.x` with `Destination host unreachable` from `192.168.1.12`.
@@ -681,10 +594,10 @@ During the design, deployment, and testing phases of this capstone lab, several 
 | **DHCP Leases** | `diagnose sys dhcp lease list` | Workstation MACs allocated IPs in range `192.168.10.100 - .200` |
 | **IPsec Phase 1 Status** | `diagnose vpn ike gateway list` | Status `ESTABLISHED`, SA count $\ge 1$ for `To-BR1` and `To-BR2` |
 | **IPsec Phase 2 Status** | `diagnose vpn tunnel list` | Status `active`, SA lifetime counting, Rx/Tx packet counters incrementing |
-| **Branch-to-Branch Ping** | From BR1 host ping BR2 host (`10.30.10.1`) | Success rate 100% via HQ transit tunnel routing |
-| **Inbound VIP Port Forward** | `curl -I http://203.0.113.6:8080` | HTTP 200 OK returned from internal server `192.168.20.20:80` |
-| **Internet Access & NAT** | From User PC: `ping 8.8.8.8` | 100% success; FortiGate session table shows SNAT to `203.0.113.6` |
-| **Inter-VLAN Restriction** | Ping from User (VLAN 10) to DB (VLAN 27) | Traffic dropped by implicit deny / absence of inter-tier policy |
+| **Branch-to-Branch Ping** | From `VPC17` ping `VPC27` (`10.30.20.10`) | Success rate 100% via HQ transit tunnel routing |
+| **Inbound VIP Port Forward** | `curl -I http://203.0.113.6:8080` | HTTP 200 OK returned from internal server `SRV1` (`192.168.20.20:80`) |
+| **Internet Access & NAT** | From `PC1`: `ping 8.8.8.8` | 100% success; FortiGate session table shows SNAT to `203.0.113.6` |
+| **Inter-VLAN Restriction** | Ping from `PC1` (VLAN 10) to `DB` (VLAN 27) | Traffic dropped by implicit deny / absence of inter-tier policy |
 
 ---
 
@@ -703,7 +616,7 @@ During the design, deployment, and testing phases of this capstone lab, several 
 | **NAT & VIP Publishing** | Dynamic SNAT + Destination Port Forwarding | **COMPLETED** | PAT on egress; VIP `8080 -> 80` published for servers on HQ & Branches |
 | **Security Profiles (UTM)** | Antivirus, IPS, Web Filter, App Control, SSL Insp | **COMPLETED** | Active on Policy 2 (Internet) & Policy 4 (SSL-VPN) |
 | **Remote User VPN** | SSL-VPN or IPsec Remote Access with auth | **COMPLETED** | SSL-VPN Gateway on `port1`, `full-access` portal, `ssl.root` policy |
-| **Bonus: Multi-Tier Design**| Presentation -> Logic -> Data 3-tier hardening | **BONUS** | Micro-segmented Web (VLAN 20) -> API (VLAN 25) -> DB (VLAN 27) |
+| **Bonus: Multi-Tier Design**| Presentation -> Logic -> Data 3-tier hardening | **BONUS** | Micro-segmented Web (`SRV1`) -> API (`API`) -> DB (`DB`) |
 
 ---
 *End of Engineering Documentation.*
