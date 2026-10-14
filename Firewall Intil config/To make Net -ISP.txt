@@ -1,0 +1,6 @@
+add to the router 
+! Default route to internet
+ip route 0.0.0.0 0.0.0.0 192.168.85.2
+
+your pc
+ route -p add 203.0.113.0 mask 255.255.255.0 192.168.85.203(changing only in 203)

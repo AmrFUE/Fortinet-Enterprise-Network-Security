@@ -1,0 +1,81 @@
+Open your browser to http://203.0.113.6 and log in.
+
+A. Verify/Create the 3 VLAN Sub-interfaces on port2
+
+Go to Network 
+→
+→ Interfaces.
+
+Click Create New 
+→
+→ Interface.
+
+Create VLAN 10 (Users):
+
+Name: VLAN10_Users
+Type: VLAN | Interface: port2 | VLAN ID: 10
+IP/Mask: 192.168.10.1/255.255.255.0
+Administrative Access: Check PING, HTTPS, HTTP
+DHCP Server: Enabled (Range: 192.168.10.100 - 192.168.10.200)
+Click OK.
+
+Create VLAN 20 (Servers):
+
+Click Create New 
+→
+→ Interface.
+Name: VLAN20_Servers
+Type: VLAN | Interface: port2 | VLAN ID: 20
+IP/Mask: 192.168.20.1/255.255.255.0
+Administrative Access: Check PING, HTTPS, HTTP
+DHCP Server: Disabled
+Click OK.
+
+Create VLAN 30 (Management):
+
+Click Create New 
+→
+→ Interface.
+Name: VLAN30_Mgmt
+Type: VLAN | Interface: port2 | VLAN ID: 30
+IP/Mask: 192.168.30.1/255.255.255.0
+Administrative Access: Check PING, HTTPS, HTTP
+Click OK.
+
+
+
+=================	ACCESS THE INTERNET POLICY     =================
+
+
+To let your Users and Servers access the Internet:
+
+In the left menu, go to Policy & Objects 
+→
+→ Firewall Policy.
+Click Create New (top left).
+Fill in:
+Name: LAN_to_WAN
+Incoming Interface: Select all three VLANs (VLAN10_Users, VLAN20_Servers, VLAN30_Mgmt)
+Outgoing Interface: Select port1 (WAN)
+Source: Select all
+Destination: Select all
+Schedule: always
+Service: Select ALL
+Action: ACCEPT
+NAT: Toggle ON (Enabled)
+Click OK.
+
+=================	GIVE ENDPOINTS THE IPs	    =================
+
+any PC : ip dhcp
+
+SERVERS: VPC11 (Server 1): ip 192.168.20.11 255.255.255.0 192.168.20.1
+	 VPC12 (Server 2): ip 192.168.20.12 255.255.255.0 192.168.20.1
+	 Managment PC    : ip 192.168.30.10 255.255.255.0 192.168.30.1
+
+
+
+CHANGE NAMES OF PCs: set pcname <NAME>
+
+  
+  

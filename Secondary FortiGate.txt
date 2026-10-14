@@ -1,0 +1,9 @@
+# High Availability (HA Active-Passive) Configuration
+config system ha
+    set group-name HQ-HA-Cluster
+    set mode a-p
+    set hbdev port3 50 port4 50
+    set override disable
+    set priority 100
+    set unicast-hb disable
+end

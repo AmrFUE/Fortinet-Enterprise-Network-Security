@@ -1,0 +1,21 @@
+enable
+configure terminal
+
+hostname WAN-HQ
+
+! Interface connected to FortiGate port1
+interface GigabitEthernet0/0
+ ip address 203.0.113.5 255.255.255.252
+ no shutdown
+
+! Interface connected to ISP-HQ Gi0/1
+interface GigabitEthernet0/1
+ ip address 203.0.113.2 255.255.255.252
+ no shutdown
+
+! Default route out to ISP-HQ
+ip route 0.0.0.0 0.0.0.0 203.0.113.1
+
+end
+write memory
+ 

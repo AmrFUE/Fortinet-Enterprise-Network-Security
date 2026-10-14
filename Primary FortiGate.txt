@@ -1,0 +1,31 @@
+# WAN Interface Configuration
+config system interface
+    edit "port1"
+        set mode static
+        set ip 203.0.113.6 255.255.255.252
+        set allowaccess ping https ssh http
+        set alias "WAN"
+    next
+end
+
+# Default Static Route
+config router static
+    edit 1
+        set gateway 203.0.113.5
+        set device "port1"
+    next
+end
+
+# High Availability (HA Active-Passive) Configuration
+config system ha
+    set group-name "HQ-HA-Cluster"
+    set mode a-p
+    set hbdev "port3" 50 "port4" 50
+    set override disable
+    set priority 200
+    set unicast-hb disable
+end
+
+# Force Sync & Recalculate Checksums
+execute ha synchronize start
+diagnose sys ha checksum recalculate
